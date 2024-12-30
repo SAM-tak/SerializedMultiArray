@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using UnityEngine;
 
-namespace SerializedArray
+namespace RunningRazor.Data
 {
     [Serializable]
     public class BoolPlane : ISerializationCallbackReceiver
@@ -9,85 +9,75 @@ namespace SerializedArray
         /// <summary>
         /// 配列の値
         /// </summary>
-        public bool[,] Value;
+        public bool[,] Value { get; set; }
 
         /// <summary>
         /// 配列の横(X軸)
         /// </summary>
-        public int Width => m_width;
+        public int Width => _size.x;
 
         /// <summary>
         /// 配列の高さ(Y軸)
         /// </summary>
-        public int Height => m_height;
+        public int Height => _size.y;
 
-        //値保存用
-        [SerializeField]
-        [HideInInspector]
-        private bool[] Serialize;
+        // 値保存用
+        [SerializeField, HideInInspector]
+        bool[] _store;
 
-        //配列のサイズ
-        [HideInInspector]
-        [SerializeField]
-        private int m_width, m_height;
-
-
-        public void OnAfterDeserialize()
-        {
-            //Valueがnullかサイズが違う場合、リサイズする
-            if (Value != null)
-            {
-                var w = Value.GetLength(0);
-                var h = Value.GetLength(1);
-
-                if (m_width != w || m_height != h)
-                {
-                    Value = new bool[m_width, m_height];
-                }
-            }
-            else
-            {
-                Value = new bool[m_width, m_height];
-            }
-
-            //要素をコピー
-            for (int x = 0; x < m_width; x++)
-                for (int y = 0; y < m_height; y++)
-                {
-                    Value[x, y] = Serialize[x + m_width * y];
-                }
-            Serialize = null;
-
-        }
+        // 配列のサイズ
+        [HideInInspector, SerializeField]
+        Vector2Int _size;
 
         public void OnBeforeSerialize()
         {
-            if (Value == null)
+            if(Value == null) {
                 return;
-
+            }
 
             var w = Value.GetLength(0);
             var h = Value.GetLength(1);
 
-            //要素数が違えばリサイズする
-            if (Serialize == null || w * h != m_width * m_height)
-            {
-                Serialize = new bool[w * h];
+            // 要素数が違えばリサイズする
+            if(_store == null || w * h != Width * Height) {
+                _store = new bool[w * h];
             }
 
-            m_width = w;
-            m_height = h;
+            _size.x = w;
+            _size.y = h;
 
-            //要素をコピー
-            for (int x = 0; x < w; x++)
-                for (int y = 0; y < h; y++)
-                {
-                    Serialize[x + w * y] = Value[x, y];
+            // 要素をコピー
+            for(int y = 0; y < h; y++) {
+                for(int x = 0; x < w; x++) {
+                    _store[x + w * y] = Value[x, y];
                 }
+            }
+        }
 
+        public void OnAfterDeserialize()
+        {
+            // Valueがnullかサイズが違う場合、リサイズする
+            if(Value != null) {
+                var w = Value.GetLength(0);
+                var h = Value.GetLength(1);
+
+                if(Width != w || Height != h) {
+                    Value = new bool[Width, Height];
+                }
+            }
+            else {
+                Value = new bool[Width, Height];
+            }
+
+            // 要素をコピー
+            for(int y = 0; y < Height; y++) {
+                for(int x = 0; x < Width; x++) {
+                    Value[x, y] = _store[x + Width * y];
+                }
+            }
+            _store = null;
         }
     }
-
 }
 
 /*Docs
