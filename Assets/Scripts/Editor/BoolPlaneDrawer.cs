@@ -1,6 +1,6 @@
-﻿using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using RunningRazor.Data;
 
 namespace SerializedArray
 {
@@ -9,7 +9,6 @@ namespace SerializedArray
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-
             EditorGUI.BeginProperty(position, label, property);
             // 子のフィールドをインデントしない 
             var indent = EditorGUI.indentLevel;
@@ -19,142 +18,112 @@ namespace SerializedArray
             var sizeRect = new Rect(position.x + position.width * 0.4f, position.y, position.width * 0.4f, position.height);
             var buttonRect = new Rect(position.x + position.width * 0.8f + 10, position.y, position.width * 0.2f - 10, position.height);
 
-            var sizeVec = new Vector2Int(property.FindPropertyRelative("m_width").intValue,
-                                         property.FindPropertyRelative("m_height").intValue);
+            var size = property.FindPropertyRelative("_size").vector2IntValue;
 
-            //ラベル表示
+            // ラベル表示
             EditorGUI.PrefixLabel(labelRect, GUIUtility.GetControlID(FocusType.Passive), label);
 
-            //サイズ表示
+            // サイズ表示
             EditorGUI.BeginDisabledGroup(true);
-            EditorGUI.Vector2IntField(sizeRect, GUIContent.none, sizeVec);
+            EditorGUI.Vector2IntField(sizeRect, GUIContent.none, size);
             EditorGUI.EndDisabledGroup();
 
-            //編集ウィンドウを表示する
-            if (GUI.Button(buttonRect, "Edit"))
-            {
-                var obj = property.serializedObject.targetObject;
-                var fields = obj.GetType().GetFields();
-
-                //BoolPlaneを見つける
-                foreach (var field in fields)
-                {
-                    var val = field.GetValue(obj);
-
-                    if (val != null &&
-                        val.GetType() == typeof(BoolPlane) &&
-                        field.Name.ToLower() == label.text.Replace(" ", "").ToLower())
-                    {
-                        BoolPlaneWindow.ShowWindow(field, obj, property.serializedObject, label.text);
-                    }
-                }
-
-
+            // 編集ウィンドウを表示する
+            if(GUI.Button(buttonRect, "Edit")) {
+                BoolPlaneWindow.ShowWindow(property, label.text);
             }
+
             // インデントを元通りに戻す
             EditorGUI.indentLevel = indent;
-
             EditorGUI.EndProperty();
         }
 
-        private class BoolPlaneWindow : EditorWindow
+        class BoolPlaneWindow : EditorWindow
         {
-            //値の編集・更新
-            SerializedObject serialized;
-            Object obj;
+            // 値の編集・更新
+            SerializedProperty property;
             BoolPlane box;
 
-
-            //編集対象
+            // 編集対象
             bool[,] value;
 
-
-            //EditorGUI用変数
+            // EditorGUI用変数
             Vector2 scroll;
             Vector2Int planeSize;
-            Color line = new Color(0.8f, 0.8f, 0.8f);
+            Color line = new(0.8f, 0.8f, 0.8f);
 
             /// <summary>
             /// ウィンドウを表示する
             /// </summary>
-            public static void ShowWindow(FieldInfo field, Object obj, SerializedObject serialized, string label)
+            public static void ShowWindow(SerializedProperty property, string label)
             {
                 var window = GetWindow<BoolPlaneWindow>(label);
 
-                //値の設定
-                window.serialized = serialized;
-                window.obj = obj;
-                var box = field.GetValue(obj) as BoolPlane;
+                // 値の設定
+                window.property = property;
+                var box = property.boxedValue as BoolPlane;
                 window.box = box;
                 window.value = box.Value;
                 window.planeSize = new Vector2Int(box.Width, box.Height);
 
-                //画面の中心に表示する
-                var res = Screen.currentResolution;
-                var rect = new Rect(res.width / 2 - 150, res.height / 2 - 150, 300, 300);
-                window.position = rect;
-                window.ShowAsDropDown(rect, new Vector2(300, 300));
-
-
+                window.ShowUtility();
             }
-
-
 
             private void OnGUI()
             {
-                if (serialized == null)
-                {
+                if(property == null) {
                     Close();
                     return;
                 }
 
-                //配列のサイズを設定する
+                bool dirty = false;
+
+                // 配列のサイズを設定する
                 EditorGUILayout.LabelField("Set array size:");
                 EditorGUILayout.BeginHorizontal();
                 planeSize = EditorGUILayout.Vector2IntField(GUIContent.none, planeSize);
-                if (GUILayout.Button("Set"))
-                {
-                    //配列のサイズ変更
+                if(GUILayout.Button("Set")) {
+                    // 配列のサイズ変更
                     ResizeArray();
-
-                    //変更した配列をBoolPlaneに適用
-                    serialized.Update();
+                    // 変更した配列をBoolPlaneに適用
                     box.Value = value;
-                    serialized.ApplyModifiedPropertiesWithoutUndo();
-
-                    //保存処理
-                    EditorUtility.SetDirty(obj);
-                    AssetDatabase.SaveAssets();
+                    dirty = true;
                 }
                 EditorGUILayout.EndHorizontal();
 
-
-                //値を表示するエリア
-                if (value == null)
+                // 値を表示するエリア
+                if(value == null) {
                     return;
+                }
 
                 scroll = EditorGUILayout.BeginScrollView(scroll);
 
-                for (int y = 0; y < value.GetLength(1); y++)
-                {
+                for(int y = 0; y < value.GetLength(1); y++) {
                     EditorGUILayout.BeginHorizontal();
-                    for (int x = 0; x < value.GetLength(0); x++)
-                    {
-                        //5マスごとに色を変更する
-                        if (x % 5 == 4 || y % 5 == 4)
-                        {
+                    for(int x = 0; x < value.GetLength(0); x++) {
+                        // 5マスごとに色を変更する
+                        bool colored = x % 5 == 4 || y % 5 == 4;
+                        if(colored) {
                             GUI.color = line;
-                            value[x, y] = EditorGUILayout.Toggle(value[x, y], GUILayout.Width(15));
-                            GUI.color = Color.white;
                         }
-                        else
-                        {
-                            value[x, y] = EditorGUILayout.Toggle(value[x, y], GUILayout.Width(15));
+                        var bit = EditorGUILayout.Toggle(value[x, y], GUILayout.Width(15));
+                        if(value[x, y] != bit) {
+                            value[x, y] = bit;
+                            dirty = true;
+                        }
+                        if(colored) {
+                            GUI.color = Color.white;
                         }
                     }
                     EditorGUILayout.EndHorizontal();
                 }
                 EditorGUILayout.EndScrollView();
+
+                if(dirty) {
+                    // 保存処理
+                    property.boxedValue = box;
+                    property.serializedObject.ApplyModifiedProperties();
+                }
             }
 
             /// <summary>
@@ -163,25 +132,14 @@ namespace SerializedArray
             private void ResizeArray()
             {
                 var newValue = new bool[planeSize.x, planeSize.y];
-                for (int x = 0; x < planeSize.x && x < value.GetLength(0); x++)
-                    for (int y = 0; y < planeSize.y && y < value.GetLength(1); y++)
-                    {
+                for(int x = 0; x < planeSize.x && x < value.GetLength(0); x++)
+                    for(int y = 0; y < planeSize.y && y < value.GetLength(1); y++) {
                         newValue[x, y] = value[x, y];
                     }
                 value = newValue;
             }
-
-            private void OnDestroy()
-            {
-                //ウィンドウを閉じるときに値を保存する
-                EditorUtility.SetDirty(obj);
-                AssetDatabase.SaveAssets();
-            }
-
-
         }
     }
-
 }
 
 /*Docs
