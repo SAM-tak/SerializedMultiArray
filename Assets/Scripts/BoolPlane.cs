@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace RunningRazor.Data
+namespace SerializedArray
 {
     [Serializable]
     public class BoolPlane : ISerializationCallbackReceiver
